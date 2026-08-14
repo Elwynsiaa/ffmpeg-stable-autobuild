@@ -113,6 +113,9 @@ jobs:
           # bypass savannah server outages by mirroring config files from github
           sed -i 's|https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess|g' cross_compile_ffmpeg.sh
           sed -i 's|https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub|g' cross_compile_ffmpeg.sh
+
+          # lame internal compiler error on win64 by forcing -O2
+          sed -i 's/do_lame() {/do_lame() {\n  export CFLAGS="-O2"/' cross_compile_ffmpeg.sh
           
       - name: Install APT dependencies
         run: |
