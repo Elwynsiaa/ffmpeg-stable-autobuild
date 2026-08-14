@@ -109,10 +109,9 @@ jobs:
         run: sed -i 's|../build/cmake/toolchains|../cmake/toolchains|g' cross_compile_ffmpeg.sh
           
       - name: Install APT dependencies
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        # Fix 5: Added gcc-multilib & g++-multilib to fix 32-bit CUDA cross-compilation crash
-        with:
-          packages: ragel cvs yasm pax nasm gperf autogen autoconf-archive gcc-multilib g++-multilib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ragel cvs yasm pax nasm gperf autogen autoconf-archive gcc-multilib g++-multilib
           
       - name: Install pip dependencies
         run: sudo -H pip3 -qq install meson ninja
