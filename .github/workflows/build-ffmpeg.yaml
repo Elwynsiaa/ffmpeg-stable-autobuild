@@ -113,6 +113,9 @@ jobs:
           # bypass savannah server outages by mirroring config files from github
           sed -i 's|https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess|g' cross_compile_ffmpeg.sh
           sed -i 's|https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub|g' cross_compile_ffmpeg.sh
+
+          # lame win64 internal compiler error by stripping -fstack-clash-protection
+          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure\n  generic_configure "--enable-nasm --enable-libmpg123"|g' cross_compile_ffmpeg.sh
           
       - name: Install APT dependencies
         run: |
@@ -136,7 +139,7 @@ jobs:
           
       - name: Compile FFmpeg ${{ needs.check.outputs.version }} using ffmpeg-windows-build-helpers ${{ needs.check.outputs.helper-git-sha-short }}
         # Passed --cflags here so the compiler finds our dummy timeapi.h file
-        run: ./cross_compile_ffmpeg.sh --cflags="-I${{ github.workspace }}/fallback_headers -O2" --ffmpeg-git-checkout-version=n${{ needs.check.outputs.version }} --gcc-cpu-count=$(nproc) --disable-nonfree=n --sandbox-ok=y --compiler-flavors=${{ matrix.os }}
+        run: ./cross_compile_ffmpeg.sh --cflags="-I${{ github.workspace }}/fallback_headers" --ffmpeg-git-checkout-version=n${{ needs.check.outputs.version }} --gcc-cpu-count=$(nproc) --disable-nonfree=n --sandbox-ok=y --compiler-flavors=${{ matrix.os }}
           
       - name: Upload FFmpeg binaries
         # Fix 7: Entirely skip upload step instead of passing invalid retention-days: 0
