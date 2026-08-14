@@ -105,8 +105,14 @@ jobs:
           ref: ${{ needs.check.outputs.helper-git-sha }}
           persist-credentials: false
 
-      - name: Patch ffmpeg-windows-build-helpers for AOMedia toolchain move
-        run: sed -i 's|../build/cmake/toolchains|../cmake/toolchains|g' cross_compile_ffmpeg.sh
+      - name: Patch ffmpeg-windows-build-helpers scripts
+        run: |
+          # AOMedia toolchain move
+          sed -i 's|../build/cmake/toolchains|../cmake/toolchains|g' cross_compile_ffmpeg.sh
+
+          # bypass savannah server outages by mirroring config files from github
+          sed -i 's|https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess|g' cross_compile_ffmpeg.sh
+          sed -i 's|https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub|g' cross_compile_ffmpeg.sh
           
       - name: Install APT dependencies
         run: |
