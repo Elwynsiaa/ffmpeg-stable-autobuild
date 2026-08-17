@@ -98,6 +98,18 @@ jobs:
         os: [win64, win32]
         
     steps:
+      - name: Free up runner disk space
+        # Fix 5: Clear unneeded preinstalled environments to prevent 64-bit disk space exhaustion
+        run: |
+          echo "Freeing up disk space..."
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker system prune -af
+          sudo docker volume prune -f
+          echo "Disk space reclaimed!"
+
       - name: Checkout ${{ needs.check.outputs.helper-git-owner }}/ffmpeg-windows-build-helpers
         uses: actions/checkout@v6
         with:
@@ -131,10 +143,10 @@ jobs:
       - name: Install pip dependencies
         run: sudo -H pip3 -qq install meson ninja
         
-      - name: Create fallback timeapi.h for MinGW
-        # Fix 6: Create dummy timeapi.h pointing to mmsystem.h to fix the AMF compilation crash
+      - name: Create fallback timeapi.h and lame.h for MinGW
+        # Fix 6: Create dummy headers for AMF (timeapi.h) and LAME include subfolder (lame/lame.h)
         run: |
-          mkdir -p ${{ github.workspace }}/fallback_headers
+          mkdir -p ${{ github.workspace }}/fallback_headers/lame
           cat << 'EOF' > ${{ github.workspace }}/fallback_headers/timeapi.h
           #ifndef _TIMEAPI_H_
           #define _TIMEAPI_H_
@@ -142,9 +154,15 @@ jobs:
           #include <mmsystem.h>
           #endif
           EOF
+          cat << 'EOF' > ${{ github.workspace }}/fallback_headers/lame/lame.h
+          #ifndef _FALLBACK_LAME_H_
+          #define _FALLBACK_LAME_H_
+          #include <lame.h>
+          #endif
+          EOF
           
       - name: Compile FFmpeg ${{ needs.check.outputs.version }} using ffmpeg-windows-build-helpers ${{ needs.check.outputs.helper-git-sha-short }}
-        # Passed --cflags here so the compiler finds our dummy timeapi.h file
+        # Passed --cflags here so the compiler finds our fallback headers
         run: ./cross_compile_ffmpeg.sh --cflags="-I${{ github.workspace }}/fallback_headers" --ffmpeg-git-checkout-version=n${{ needs.check.outputs.version }} --gcc-cpu-count=$(nproc) --disable-nonfree=n --sandbox-ok=y --compiler-flavors=${{ matrix.os }}
           
       - name: Upload FFmpeg binaries
