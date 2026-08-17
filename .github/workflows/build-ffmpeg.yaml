@@ -122,10 +122,10 @@ jobs:
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g' {} + || true
 
           # 4. Fix LAME build: remove -fstack-clash-protection and configure as standalone encoder
-          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure\n  generic_configure "--enable-nasm --disable-decoder --disable-frontend"|g' cross_compile_ffmpeg.sh
+          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend"|g' cross_compile_ffmpeg.sh
 
-          # 5. Fix FFmpeg configure test for libmp3lame (appends -lm to probe test linker)
-          sed -i 's|\./configure \$config_options|sed -i "s/-lmp3lame/-lmp3lame -lm/g" configure; ./configure $config_options|g' cross_compile_ffmpeg.sh
+          # 5. Inject -lm into FFmpeg configure probe for libmp3lame inside do_configure()
+          sed -i 's|chmod u+x "\$configure_name"|if [ -f configure ]; then sed -i "s/-lmp3lame/-lmp3lame -lm/g" configure 2>/dev/null \|\| true; fi; chmod u+x "\$configure_name"|g' cross_compile_ffmpeg.sh
 
       - name: Install APT dependencies
         run: |
