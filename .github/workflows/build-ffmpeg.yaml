@@ -104,17 +104,20 @@ jobs:
           repository: ${{ needs.check.outputs.helper-git-owner }}/ffmpeg-windows-build-helpers
           ref: ${{ needs.check.outputs.helper-git-sha }}
           persist-credentials: false
-
+          
       - name: Patch ffmpeg-windows-build-helpers scripts
         run: |
-          # AOMedia toolchain move
+          # 1. Fix AOMedia toolchain move
           sed -i 's|../build/cmake/toolchains|../cmake/toolchains|g' cross_compile_ffmpeg.sh
-
-          # bypass savannah server outages by mirroring config files from github
-          sed -i -E 's|https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.guess[^"'\'']*|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess|g' cross_compile_ffmpeg.sh
-          sed -i -E 's|https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*|https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub|g' cross_compile_ffmpeg.sh
           
-          # lame win64 internal compiler error by stripping -fstack-clash-protection
+          # 2. Intercept the downloaded secondary GCC script and patch Savannah URLs to use GitHub's GCC mirror
+          sed -i 's|download_gcc_build_script \$zeranoe_script_name|download_gcc_build_script \$zeranoe_script_name; sed -i -E "s#https?://[^\"'\'' ]*savannah\.gnu\.org[^\"'\'' ]*config\.guess[^\"'\'' ]*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess#g" \$zeranoe_script_name; sed -i -E "s#https?://[^\"'\'' ]*savannah\.gnu\.org[^\"'\'' ]*config\.sub[^\"'\'' ]*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g" \$zeranoe_script_name|g' cross_compile_ffmpeg.sh
+
+          # 3. Also patch any local copies in the patches folder just in case
+          find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.guess[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess#g' {} + || true
+          find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g' {} + || true
+
+          # 4. Fix LAME win64 internal compiler error by stripping -fstack-clash-protection
           sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure\n  generic_configure "--enable-nasm --enable-libmpg123"|g' cross_compile_ffmpeg.sh
           
       - name: Install APT dependencies
