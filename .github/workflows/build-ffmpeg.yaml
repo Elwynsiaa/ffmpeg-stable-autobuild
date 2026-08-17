@@ -25,7 +25,7 @@ jobs:
         run: |
           version=$(curl -s https://endoflife.date/api/ffmpeg.json | jq -r .[0].latest)
           
-          # Fix 1: FFmpeg git tags drop the trailing ".0" for initial major/minor releases
+          # FFmpeg git tags drop trailing ".0" for initial major/minor releases (e.g. 9.0.0 -> 9.0)
           if [[ "$version" =~ ^[0-9]+\.[0-9]+\.0$ ]]; then
             version="${version%.0}"
           fi
@@ -45,7 +45,6 @@ jobs:
           
       - name: Get ffmpeg-stable-autobuild latest build
         id: ffmpeg-autobuild-info
-        # Fix 2: Handle missing previous release (404) gracefully without slicing JSON error strings
         run: |
           if ! tag_name=$(gh api repos/$GITHUB_REPOSITORY/releases/latest -q .tag_name 2>/dev/null); then
             echo "No previous release found."
@@ -61,7 +60,6 @@ jobs:
       - name: Check if there is newer version or commit
         id: check-build
         if: '! inputs.force_build'
-        # Fix 3: Safely output true/false instead of crashing the job with an exit code 1
         run: |
           if [[ "${{ steps.ffmpeg-info.outputs.version }}" != "${{ steps.ffmpeg-autobuild-info.outputs.version }}" ]] || \
              [[ "${{ steps.ffmpeg-helper-info.outputs.git-sha-short }}" != "${{ steps.ffmpeg-autobuild-info.outputs.helper-git-sha }}" ]]; then
@@ -72,7 +70,6 @@ jobs:
           
       - name: Generate release tag timestamp
         id: generate-tag
-        # Fix 4: Generate timestamp once so matrix jobs don't have a race condition
         run: |
           echo "build-tag=$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_OUTPUT
           echo "run-date=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
@@ -91,15 +88,10 @@ jobs:
     if: needs.check.outputs.run_build == 'true' || inputs.force_build
     runs-on: ubuntu-22.04
     env:
-      # Suppresses the annoying Node.js 20 deprecation warnings
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    strategy:
-      matrix:
-        os: [win64, win32]
         
     steps:
       - name: Free up runner disk space
-        # Fix 5: Clear unneeded preinstalled environments to prevent 64-bit disk space exhaustion
         run: |
           echo "Freeing up disk space..."
           sudo rm -rf /usr/share/dotnet
@@ -116,35 +108,34 @@ jobs:
           repository: ${{ needs.check.outputs.helper-git-owner }}/ffmpeg-windows-build-helpers
           ref: ${{ needs.check.outputs.helper-git-sha }}
           persist-credentials: false
-          
+
       - name: Patch ffmpeg-windows-build-helpers scripts
         run: |
           # 1. Fix AOMedia toolchain move
           sed -i 's|../build/cmake/toolchains|../cmake/toolchains|g' cross_compile_ffmpeg.sh
           
-          # 2. Intercept the downloaded secondary GCC script and patch Savannah URLs to use GitHub's GCC mirror
+          # 2. Intercept downloaded secondary GCC script and patch Savannah URLs to use GitHub's GCC mirror
           sed -i 's|download_gcc_build_script \$zeranoe_script_name|download_gcc_build_script \$zeranoe_script_name; sed -i -E "s#https?://[^\"'\'' ]*savannah\.gnu\.org[^\"'\'' ]*config\.guess[^\"'\'' ]*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess#g" \$zeranoe_script_name; sed -i -E "s#https?://[^\"'\'' ]*savannah\.gnu\.org[^\"'\'' ]*config\.sub[^\"'\'' ]*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g" \$zeranoe_script_name|g' cross_compile_ffmpeg.sh
 
-          # 3. Patch any local copies in the patches folder
+          # 3. Patch local copies in patches folder
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.guess[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess#g' {} + || true
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g' {} + || true
 
-          # 4. Fix LAME: remove -fstack-clash-protection (win64 crash) and configure without decoder/frontend
+          # 4. Fix LAME build: remove -fstack-clash-protection and configure as standalone encoder
           sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure\n  generic_configure "--enable-nasm --disable-decoder --disable-frontend"|g' cross_compile_ffmpeg.sh
 
-          # 5. Remove missing -lmpg123 from FFmpeg extra-libs so the LAME configure test succeeds
-          sed -i 's/-lmpg123//g' cross_compile_ffmpeg.sh
-          
+          # 5. Fix FFmpeg configure test for libmp3lame (appends -lm to probe test linker)
+          sed -i 's|\./configure \$config_options|sed -i "s/-lmp3lame/-lmp3lame -lm/g" configure; ./configure $config_options|g' cross_compile_ffmpeg.sh
+
       - name: Install APT dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ragel cvs yasm pax nasm gperf autogen autoconf-archive gcc-multilib g++-multilib
-          
+
       - name: Install pip dependencies
         run: sudo -H pip3 -qq install meson ninja
         
-      - name: Create fallback timeapi.h and lame.h for MinGW
-        # Fix 6: Create dummy headers for AMF (timeapi.h) and LAME include subfolder (lame/lame.h)
+      - name: Create fallback headers for MinGW
         run: |
           mkdir -p ${{ github.workspace }}/fallback_headers/lame
           cat << 'EOF' > ${{ github.workspace }}/fallback_headers/timeapi.h
@@ -155,44 +146,39 @@ jobs:
           #endif
           EOF
           cat << 'EOF' > ${{ github.workspace }}/fallback_headers/lame/lame.h
-          #ifndef _FALLBACK_LAME_H_
-          #define _FALLBACK_LAME_H_
+          #ifndef _FALLBACK_LAME_LAME_H_
+          #define _FALLBACK_LAME_LAME_H_
           #include <lame.h>
           #endif
           EOF
           
       - name: Compile FFmpeg ${{ needs.check.outputs.version }} using ffmpeg-windows-build-helpers ${{ needs.check.outputs.helper-git-sha-short }}
-        # Passed --cflags here so the compiler finds our fallback headers
-        run: ./cross_compile_ffmpeg.sh --cflags="-I${{ github.workspace }}/fallback_headers" --ffmpeg-git-checkout-version=n${{ needs.check.outputs.version }} --gcc-cpu-count=$(nproc) --disable-nonfree=n --sandbox-ok=y --compiler-flavors=${{ matrix.os }}
+        run: ./cross_compile_ffmpeg.sh --cflags="-I${{ github.workspace }}/fallback_headers" --ffmpeg-git-checkout-version=n${{ needs.check.outputs.version }} --gcc-cpu-count=$(nproc) --disable-nonfree=n --sandbox-ok=y --compiler-flavors=win64
           
       - name: Upload FFmpeg binaries
-        # Fix 7: Entirely skip upload step instead of passing invalid retention-days: 0
         if: '! inputs.no_release'
         uses: actions/upload-artifact@v7
         with:
-          name: ffmpeg-${{ matrix.os }}
+          name: ffmpeg-win64
           path: |
-            sandbox/${{ matrix.os }}/ffmpeg_git_with_fdk_aac_n${{ needs.check.outputs.version }}/ffmpeg.exe
-            sandbox/${{ matrix.os }}/ffmpeg_git_with_fdk_aac_n${{ needs.check.outputs.version }}/ffprobe.exe
-            sandbox/${{ matrix.os }}/ffmpeg_git_with_fdk_aac_n${{ needs.check.outputs.version }}/ffplay.exe
+            sandbox/win64/ffmpeg_git_with_fdk_aac_n${{ needs.check.outputs.version }}/ffmpeg.exe
+            sandbox/win64/ffmpeg_git_with_fdk_aac_n${{ needs.check.outputs.version }}/ffprobe.exe
+            sandbox/win64/ffmpeg_git_with_fdk_aac_n${{ needs.check.outputs.version }}/ffplay.exe
           if-no-files-found: error
           retention-days: 1
           
   archive:
     permissions:
-      contents: read # Fix 8: Required for build-provenance attestations (now safely removed)
+      contents: read
     needs: [check, build]
     if: needs.check.outputs.run_build == 'true' || inputs.force_build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [win64, win32]
         
     steps:
       - name: Download FFmpeg binaries
         uses: actions/download-artifact@v8
         with:
-          name: ffmpeg-${{ matrix.os }}
+          name: ffmpeg-win64
           
       - name: Create LICENSE
         run: |
@@ -200,14 +186,14 @@ jobs:
           echo "Therefore it is not legally redistributable." >> LICENSE
           
       - name: 7-Zip FFmpeg binaries
-        run: 7z a -mx9 ffmpeg-${{ needs.check.outputs.version }}-${{ needs.check.outputs.helper-git-sha-short }}-${{ matrix.os }}-nonfree.7z ff{mpeg,probe,play}.exe LICENSE
+        run: 7z a -mx9 ffmpeg-${{ needs.check.outputs.version }}-${{ needs.check.outputs.helper-git-sha-short }}-win64-nonfree.7z ff{mpeg,probe,play}.exe LICENSE
           
       - name: Upload FFmpeg archive
         if: '! inputs.no_release'
         uses: actions/upload-artifact@v7
         with:
-          name: ffmpeg-archive-${{ matrix.os }}
-          path: ffmpeg-${{ needs.check.outputs.version }}-${{ needs.check.outputs.helper-git-sha-short }}-${{ matrix.os }}-nonfree.7z
+          name: ffmpeg-archive-win64
+          path: ffmpeg-${{ needs.check.outputs.version }}-${{ needs.check.outputs.helper-git-sha-short }}-win64-nonfree.7z
           retention-days: 1
           compression-level: 0
           
@@ -216,7 +202,7 @@ jobs:
     if: (needs.check.outputs.run_build == 'true' || inputs.force_build) && !inputs.no_release
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Fix 9: Requires explicit write permission to create a Release via `gh`
+      contents: write
     steps:
       - name: Download FFmpeg archives
         uses: actions/download-artifact@v8
@@ -227,7 +213,7 @@ jobs:
       - name: Release FFmpeg archives
         run: |
           gh release create "${{ needs.check.outputs.build-tag }}-${{ needs.check.outputs.helper-git-sha-short }}-${{ needs.check.outputs.version }}" \
-          ffmpeg-${{ needs.check.outputs.version }}-${{ needs.check.outputs.helper-git-sha-short }}-{win64,win32}-nonfree.7z \
+          ffmpeg-${{ needs.check.outputs.version }}-${{ needs.check.outputs.helper-git-sha-short }}-win64-nonfree.7z \
           -n "FFmpeg nonfree ${{ needs.check.outputs.version }} build triggered at ${{ needs.check.outputs.run-date }}
           Using ${{ needs.check.outputs.helper-git-owner }}/ffmpeg-windows-build-helpers git-${{ needs.check.outputs.helper-git-sha }}" \
           -t "${{ needs.check.outputs.version }} ${{ needs.check.outputs.run-date }} ${{ needs.check.outputs.helper-git-sha-short }}"
