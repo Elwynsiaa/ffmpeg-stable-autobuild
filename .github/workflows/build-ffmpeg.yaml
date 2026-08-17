@@ -117,8 +117,8 @@ jobs:
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.guess[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess#g' {} + || true
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g' {} + || true
 
-          # 4. Fix LAME win64 internal compiler error by stripping -fstack-clash-protection
-          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure\n  generic_configure "--enable-nasm --enable-libmpg123"|g' cross_compile_ffmpeg.sh
+          # 4. Fix LAME compilation and static linking
+          sed -i -E 's/generic_configure "[^"]*enable-libmpg123[^"]*"/sed -i "s\/-fstack-clash-protection\/\/g" configure; generic_configure "--enable-nasm --disable-decoder --disable-frontend"/g' cross_compile_ffmpeg.sh
           
       - name: Install APT dependencies
         run: |
