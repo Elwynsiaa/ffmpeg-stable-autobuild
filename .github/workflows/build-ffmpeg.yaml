@@ -122,10 +122,10 @@ jobs:
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g' {} + || true
 
           # 4. Fix LAME: remove -fstack-clash-protection, disable decoder/frontend, and copy headers to include/lame/
-          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend"; mkdir -p $mingw_w64_x86_64_prefix/include/lame; cp -f include/lame.h $mingw_w64_x86_64_prefix/include/lame/ 2>/dev/null \|\| true; cp -f include/lame.h $mingw_w64_x86_64_prefix/include/ 2>/dev/null \|\| true|g' cross_compile_ffmpeg.sh
+          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend"; find . -name "lame.h" -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/ \; -exec mkdir -p ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame \; -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame/ \;|g' cross_compile_ffmpeg.sh
 
-          # 5. Inject -lm into FFmpeg configure probe for libmp3lame right inside the FFmpeg source directory
-          sed -i 's|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  sed -i "s/-lmp3lame/-lmp3lame -lm/g" configure|g' cross_compile_ffmpeg.sh
+          # 5. Bypass fragile FFmpeg libmp3lame probe and activate it directly
+          sed -i 's|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  sed -i "s/enabled libmp3lame && require \\\"libmp3lame >= 3.98.3\\\".*/enabled libmp3lame \&\& enable libmp3lame/g" configure|g' cross_compile_ffmpeg.sh
 
           # 6. Update libidn2 to 2.3.7 and disable docs (fixes Automake version mismatch crash)
           sed -i 's|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.0.tar.gz|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.7.tar.gz libidn2-2.3.7 "--disable-doc"|g' cross_compile_ffmpeg.sh
@@ -140,18 +140,12 @@ jobs:
         
       - name: Create fallback headers for MinGW
         run: |
-          mkdir -p ${{ github.workspace }}/fallback_headers/lame
+          mkdir -p ${{ github.workspace }}/fallback_headers
           cat << 'EOF' > ${{ github.workspace }}/fallback_headers/timeapi.h
           #ifndef _TIMEAPI_H_
           #define _TIMEAPI_H_
           #include <windows.h>
           #include <mmsystem.h>
-          #endif
-          EOF
-          cat << 'EOF' > ${{ github.workspace }}/fallback_headers/lame/lame.h
-          #ifndef _FALLBACK_LAME_LAME_H_
-          #define _FALLBACK_LAME_LAME_H_
-          #include <lame.h>
           #endif
           EOF
           
