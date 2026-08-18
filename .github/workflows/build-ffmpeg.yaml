@@ -124,8 +124,8 @@ jobs:
           # 4. Fix LAME: remove -fstack-clash-protection, disable decoder/frontend, and copy headers to include/lame/
           sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend"; find . -name "lame.h" -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/ \; -exec mkdir -p ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame \; -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame/ \;|g' cross_compile_ffmpeg.sh
 
-          # 5. Bypass fragile FFmpeg libmp3lame probe and activate it directly
-          sed -i 's|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  sed -i "s/enabled libmp3lame && require \\\"libmp3lame >= 3.98.3\\\".*/enabled libmp3lame \&\& enable libmp3lame/g" configure|g' cross_compile_ffmpeg.sh
+          # 5. Directly bypass fragile FFmpeg libmp3lame probe and activate it
+          sed -i 's|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  sed -i -E "s#require \\\"libmp3lame >= 3.98.3\\\"[^\;]*#enable libmp3lame#g" configure|g' cross_compile_ffmpeg.sh
 
           # 6. Update libidn2 to 2.3.7 and disable docs (fixes Automake version mismatch crash)
           sed -i 's|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.0.tar.gz|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.7.tar.gz libidn2-2.3.7 "--disable-doc"|g' cross_compile_ffmpeg.sh
