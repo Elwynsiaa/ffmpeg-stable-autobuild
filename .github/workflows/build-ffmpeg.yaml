@@ -141,7 +141,8 @@ jobs:
           # 6. Update libidn2 to 2.3.7 and disable docs (fixes Automake version mismatch crash)
           sed -i 's|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.0.tar.gz|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.7.tar.gz libidn2-2.3.7 "--disable-doc"|g' cross_compile_ffmpeg.sh
 
-          # 7. Bypass VideoLAN GitLab outages by using the official GitHub mirror for dav1d
+          # 7. Bypass VideoLAN GitLab outages by using the official GitHub mirrors for x264 and dav1d
+          sed -i 's|https://code.videolan.org/videolan/x264.git|https://github.com/videolan/x264.git|g' cross_compile_ffmpeg.sh
           sed -i 's|https://code.videolan.org/videolan/dav1d.git|https://github.com/videolan/dav1d.git|g' cross_compile_ffmpeg.sh
 
       - name: Install APT dependencies
