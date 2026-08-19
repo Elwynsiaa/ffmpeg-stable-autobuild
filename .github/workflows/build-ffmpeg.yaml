@@ -109,6 +109,17 @@ jobs:
           ref: ${{ needs.check.outputs.helper-git-sha }}
           persist-credentials: false
 
+      - name: Create FFmpeg in-source patch script
+        run: |
+          cat << 'EOF' > patch_ffmpeg.sh
+          #!/bin/bash
+          if [ -f configure ]; then
+            echo "Applying libmp3lame patch to FFmpeg configure..."
+            sed -i -E 's#require "libmp3lame >= 3.98.3"[^;]*#{ enable libmp3lame; add_extralibs "-lmp3lame -lm"; }#g' configure
+          fi
+          EOF
+          chmod +x patch_ffmpeg.sh
+
       - name: Patch ffmpeg-windows-build-helpers scripts
         run: |
           # 1. Fix AOMedia toolchain move
@@ -124,8 +135,8 @@ jobs:
           # 4. Fix LAME: remove -fstack-clash-protection, disable decoder/frontend, and copy headers to include/lame/
           sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend"; find . -name "lame.h" -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/ \; -exec mkdir -p ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame \; -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame/ \;|g' cross_compile_ffmpeg.sh
 
-          # 5. Directly activate libmp3lame and register linker flags (-lmp3lame -lm) in configure
-          sed -i 's|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  sed -i -E "s#require \\\"libmp3lame >= 3.98.3\\\"[^\;]*#{ enable libmp3lame; add_extralibs \"-lmp3lame -lm\"; }#g" configure|g' cross_compile_ffmpeg.sh
+          # 5. Call our clean patch_ffmpeg.sh script right inside the FFmpeg folder
+          sed -i "s|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  $GITHUB_WORKSPACE/patch_ffmpeg.sh|g" cross_compile_ffmpeg.sh
 
           # 6. Update libidn2 to 2.3.7 and disable docs (fixes Automake version mismatch crash)
           sed -i 's|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.0.tar.gz|https://ftp.gnu.org/gnu/libidn/libidn2-2.3.7.tar.gz libidn2-2.3.7 "--disable-doc"|g' cross_compile_ffmpeg.sh
