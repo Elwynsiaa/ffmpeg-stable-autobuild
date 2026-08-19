@@ -115,7 +115,7 @@ jobs:
           #!/bin/bash
           if [ -f configure ]; then
             echo "Applying libmp3lame patch to FFmpeg configure..."
-            sed -i -E 's#require "libmp3lame >= 3.98.3"[^;]*#{ enable libmp3lame; add_extralibs "-lmp3lame -lm"; }#g' configure
+            sed -i -E 's#require "libmp3lame >= 3.98.3"[^;]*#{ enable libmp3lame; add_extralibs "-lmp3lame -lssp -lm"; }#g' configure
           fi
           EOF
           chmod +x patch_ffmpeg.sh
@@ -132,8 +132,8 @@ jobs:
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.guess[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess#g' {} + || true
           find . -type f -name "*mingw-w64-build*" -exec sed -i -E 's#https?://[^"'\'']*savannah\.gnu\.org[^"'\'']*config\.sub[^"'\'']*#https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub#g' {} + || true
 
-          # 4. Fix LAME: remove -fstack-clash-protection, disable decoder/frontend, and copy headers to include/lame/
-          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend"; find . -name "lame.h" -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/ \; -exec mkdir -p ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame \; -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame/ \;|g' cross_compile_ffmpeg.sh
+          # 4. Fix LAME: remove hardening flags, disable decoder/frontend, and copy headers to include/lame/
+          sed -i 's|generic_configure "--enable-nasm --enable-libmpg123"|sed -i "s/-fstack-clash-protection//g; s/-fstack-protector-strong//g; s/-fstack-protector//g" configure 2>/dev/null \|\| true; generic_configure "--enable-nasm --disable-decoder --disable-frontend CFLAGS=-fno-stack-protector"; find . -name "lame.h" -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/ \; -exec mkdir -p ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame \; -exec cp -f {} ../../cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/include/lame/ \;|g' cross_compile_ffmpeg.sh
 
           # 5. Call our clean patch_ffmpeg.sh script right inside the FFmpeg folder
           sed -i "s|frei0r_load-shared-libraries-dynamically.diff|frei0r_load-shared-libraries-dynamically.diff\n  $GITHUB_WORKSPACE/patch_ffmpeg.sh|g" cross_compile_ffmpeg.sh
