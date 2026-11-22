@@ -1,7 +1,7 @@
 name: Build FFmpeg stable
 on:
   schedule:
-    - cron: '7 11 * * 0'
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       force_build:
@@ -146,6 +146,9 @@ jobs:
 
           # 8. Bypass freedesktop.org anti-bot/AI 418 block on fontconfig tarballs
           sed -i 's|https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.13.92.tar.xz|https://mirrors.slackware.com/slackware/slackware64/source/x/fontconfig/fontconfig-2.13.92.tar.xz|g' cross_compile_ffmpeg.sh
+
+          # 9. Remove removed/deprecated --enable-opengl in FFmpeg 9.1+
+          sed -i 's/--enable-opengl//g' cross_compile_ffmpeg.sh
 
       - name: Install APT dependencies
         run: |
